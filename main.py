@@ -1,8 +1,13 @@
 import cv2
 from Scripts.detection import DrowsinessDetection
-
+from Scripts.alerts import AlertSystem
+from Scripts.monitoring import DrowsinessMonitor
+from Scripts.logger import EventLogger
 
 detector = DrowsinessDetection()
+alert_system = AlertSystem()
+monitor = DrowsinessMonitor()
+logger = EventLogger()
 
 cap = cv2.VideoCapture(0)
 
@@ -18,7 +23,17 @@ while True:
     if not ret:
         break
 
-    result = detector.process_frame(frame)
+ result = detector.process_frame(frame)
+
+monitor.update(result["drowsy"])
+
+if result["drowsy"]:
+    alert_system.trigger_alert()
+
+if result["drowsy"] and not previous_drowsy:
+    logger.log_event(0)
+
+previous_drowsy = result["drowsy"]
 
     if not result["face_detected"]:
         status = "NO FACE"
