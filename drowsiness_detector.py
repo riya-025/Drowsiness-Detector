@@ -30,7 +30,7 @@ options = FaceLandmarkerOptions(
 # ==========================================
 
 EAR_THRESHOLD = 0.20
-EYES_CLOSED_TIME = 2.0
+EYES_CLOSED_TIME = 1.0
 
 YAWN_THRESHOLD = 0.25
 
@@ -95,12 +95,15 @@ def stop_alarm():
 # ==========================================
 
 cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+cap.set(cv2.CAP_PROP_FPS, 30)
 
 if not cap.isOpened():
     print("ERROR: Camera could not be opened.")
     exit()
 
-time.sleep(2)
+time.sleep(0.5)  
 
 print("Combined Drowsiness Detector started...")
 
@@ -194,7 +197,7 @@ with FaceLandmarker.create_from_options(options) as landmarker:
             data=rgb_frame
         )
 
-        timestamp += 1
+        timestamp = int(time.time() * 1000)
 
 
         # Detect face

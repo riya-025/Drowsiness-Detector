@@ -475,45 +475,6 @@ cv2.resizeWindow(
     HEIGHT
 )
 
-
-# ============================================================
-# MOUSE
-# ============================================================
-
-def mouse_callback(
-    event,
-    x,
-    y,
-    flags,
-    param
-):
-
-    global alarm_muted
-    global night_mode
-
-    if event != cv2.EVENT_LBUTTONDOWN:
-        return
-
-    # MUTE
-    if 875 <= x <= 1235 and 525 <= y <= 570:
-
-        alarm_muted = not alarm_muted
-
-        if alarm_muted:
-            stop_alarm()
-
-    # NIGHT MODE
-    elif 875 <= x <= 1235 and 585 <= y <= 630:
-
-        night_mode = not night_mode
-
-
-cv2.setMouseCallback(
-    WINDOW_NAME,
-    mouse_callback
-)
-
-
 # ============================================================
 # DETECTION
 # ============================================================
@@ -777,393 +738,50 @@ with FaceLandmarker.create_from_options(options) as landmarker:
             )
 
 
-        # ====================================================
-        # DASHBOARD
-        # ====================================================
+                    # ====================================================
+            # SHOW LIVE VIDEO + STATUS
+            # ====================================================
 
-        dashboard = np.zeros(
-            (
-                HEIGHT,
-                WIDTH,
-                3
-            ),
-            dtype=np.uint8
-        )
+            if drowsiness_status == "DROWSINESS DETECTED":
+                status_text = "WARNING"
+                status_color = (0, 0, 255)       # Red
 
-        dashboard[:] = BG
+            elif drowsiness_status == "DRIVER ALERT":
+                status_text = "SAFE"
+                status_color = (0, 200, 0)       # Green
 
-        draw_grid(
-            dashboard
-        )
+            else:
+                status_text = "SCANNING"
+                status_color = (0, 200, 255)     # Yellow
 
-
-        # ====================================================
-        # HEADER
-        # ====================================================
-
-        text(
-            dashboard,
-            "DRIVER",
-            (40, 55),
-            1.05,
-            WHITE,
-            2
-        )
-
-        text(
-            dashboard,
-            "DROWSINESS DETECTION",
-            (175, 55),
-            0.68,
-            LIGHT_BLUE,
-            2
-        )
-
-        text(
-            dashboard,
-            "AI DRIVER MONITORING SYSTEM",
-            (42, 82),
-            0.38,
-            TEXT,
-            1
-        )
-
-
-        # ====================================================
-        # STATUS
-        # ====================================================
-
-        if drowsiness_status == "DROWSINESS DETECTED":
-
-            state = "WARNING"
-            state_color = WARNING
-
-        elif drowsiness_status == "DRIVER ALERT":
-
-            state = "SAFE"
-            state_color = SAFE
-
-        else:
-
-            state = "SCANNING"
-            state_color = LIGHT_BLUE
-
-
-        cv2.circle(
-            dashboard,
-            (1000, 45),
-            7,
-            state_color,
-            -1
-        )
-
-        text(
-            dashboard,
-            state,
-            (1020, 53),
-            0.55,
-            state_color,
-            2
-        )
-
-        text(
-            dashboard,
-            "LIVE",
-            (1160, 53),
-            0.38,
-            TEXT,
-            1
-        )
-
-
-        # ====================================================
-        # CAMERA
-        # ====================================================
-
-        rounded_panel(
-            dashboard,
-            40,
-            110,
-            800,
-            520
-        )
-
-        text(
-            dashboard,
-            "LIVE CAMERA",
-            (60, 140),
-            0.48,
-            LIGHT_BLUE,
-            1
-        )
-
-        text(
-            dashboard,
-            "MEDIAPIPE FACE LANDMARKER",
-            (590, 140),
-            0.36,
-            TEXT,
-            1
-        )
-
-
-        cam_x = 55
-        cam_y = 155
-        cam_w = 770
-        cam_h = 455
-
-
-        camera_view = cv2.resize(
-            frame,
-            (cam_w, cam_h),
-            interpolation=cv2.INTER_AREA
-        )
-
-
-        dashboard[
-            cam_y:cam_y + cam_h,
-            cam_x:cam_x + cam_w
-        ] = camera_view
-
-
-        cv2.rectangle(
-            dashboard,
-            (cam_x, cam_y),
-            (cam_x + cam_w, cam_y + cam_h),
-            LIGHT_BLUE,
-            1
-        )
-
-
-        # ====================================================
-        # RIGHT PANEL
-        # ====================================================
-
-        rounded_panel(
-            dashboard,
-            860,
-            110,
-            375,
-            380
-        )
-
-        text(
-            dashboard,
-            "DRIVER TELEMETRY",
-            (885, 140),
-            0.48,
-            LIGHT_BLUE,
-            1
-        )
-
-
-        text(
-            dashboard,
-            state,
-            (885, 190),
-            0.90,
-            state_color,
-            2
-        )
-
-        text(
-            dashboard,
-            "CURRENT DRIVER STATE",
-            (885, 215),
-            0.34,
-            TEXT,
-            1
-        )
-
-
-        draw_metric(
-            dashboard,
-            "EYES",
-            eyes_status,
-            885,
-            255,
-            SAFE if eyes_status == "OPEN" else WARNING
-        )
-
-        draw_metric(
-            dashboard,
-            "EAR",
-            f"{ear:.2f}",
-            1080,
-            255,
-            LIGHT_BLUE
-        )
-
-
-        draw_metric(
-            dashboard,
-            "MOUTH",
-            mouth_status,
-            885,
-            345,
-            WARNING if mouth_status == "YAWNING" else SAFE
-        )
-
-        draw_metric(
-            dashboard,
-            "MAR",
-            f"{mar:.2f}",
-            1080,
-            345,
-            LIGHT_BLUE
-        )
-
-
-        draw_metric(
-            dashboard,
-            "HEAD",
-            head_status,
-            885,
-            435,
-            SAFE if head_status == "FORWARD" else WARNING
-        )
-
-
-        # ====================================================
-        # CONTROLS
-        # ====================================================
-
-        draw_button(
-            dashboard,
-            875,
-            525,
-            360,
-            45,
-            "ALARM MUTED" if alarm_muted else "MUTE ALARM",
-            alarm_muted
-        )
-
-        draw_button(
-            dashboard,
-            875,
-            585,
-            360,
-            45,
-            "NIGHT MODE: ON" if night_mode else "NIGHT MODE: OFF",
-            night_mode
-        )
-
-
-        # ====================================================
-        # ALERT
-        # ====================================================
-
-        if drowsiness_status == "DROWSINESS DETECTED":
-
+            # Status box in top-right corner
             cv2.rectangle(
-                dashboard,
-                (40, 595),
-                (840, 630),
-                WARNING,
+                frame,
+                (frame_width - 220, 20),
+                (frame_width - 20, 70),
+                (20, 20, 20),
                 -1
             )
 
-            text(
-                dashboard,
-                "DROWSINESS DETECTED  //  ALARM ACTIVE",
-                (260, 619),
-                0.46,
-                WHITE,
-                1
+            cv2.putText(
+                frame,
+                status_text,
+                (frame_width - 190, 55),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                status_color,
+                2,
+                cv2.LINE_AA
             )
 
-        else:
-
-            cv2.rectangle(
-                dashboard,
-                (40, 595),
-                (840, 630),
-                (30, 80, 45),
-                -1
+            # Show camera
+            cv2.imshow(
+                WINDOW_NAME,
+                frame
             )
 
-            text(
-                dashboard,
-                "DRIVER ALERT  //  CONTINUOUS MONITORING",
-                (245, 619),
-                0.46,
-                SAFE,
-                1
-            )
-
-
-        # ====================================================
-        # BLINK GRAPH
-        # ====================================================
-
-        draw_blink_graph(
-            dashboard
-        )
-
-
-        # ====================================================
-        # SYSTEM INFO
-        # ====================================================
-
-        rounded_panel(
-            dashboard,
-            860,
-            650,
-            375,
-            120
-        )
-
-        text(
-            dashboard,
-            "SYSTEM",
-            (885, 680),
-            0.42,
-            LIGHT_BLUE,
-            1
-        )
-
-        text(
-            dashboard,
-            f"BLINK COUNT     {total_blinks:03d}",
-            (885, 720),
-            0.43,
-            WHITE,
-            1
-        )
-
-        text(
-            dashboard,
-            "Q  =  EXIT",
-            (1080, 720),
-            0.43,
-            TEXT,
-            1
-        )
-
-
-        # ====================================================
-        # NIGHT MODE
-        # ====================================================
-
-        if night_mode:
-
-            dashboard = (
-                dashboard.astype(np.float32) * 0.55
-            ).astype(np.uint8)
-
-
-        # ====================================================
-        # SHOW
-        # ====================================================
-
-        cv2.imshow(
-            WINDOW_NAME,
-            dashboard
-        )
-
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
 
 # ============================================================
