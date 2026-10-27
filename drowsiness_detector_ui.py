@@ -34,7 +34,8 @@ options = FaceLandmarkerOptions(
 
 EAR_THRESHOLD = 0.20
 EYES_CLOSED_TIME = 2.0
-YAWN_THRESHOLD = 0.25
+YAWN_THRESHOLD = 0.20
+YAWN_DURATION = 0.8
 HEAD_THRESHOLD = 25
 
 LEFT_EYE = [33, 160, 158, 133, 153, 144]
@@ -81,7 +82,7 @@ last_blink_time = 0
 
 last_saved_status = None
 last_save_time = 0
-SAVE_INTERVAL = 5
+SAVE_INTERVAL = 2
 
 
 # ============================================================
@@ -480,6 +481,7 @@ cv2.resizeWindow(
 # ============================================================
 
 eyes_closed_start = None
+yawn_start = None
 
 print("Driver Drowsiness Detection started...")
 print("Press Q to exit.")
@@ -590,7 +592,7 @@ with FaceLandmarker.create_from_options(options) as landmarker:
                 eyes_closed_start = None
                 closed_duration = 0
 
-                stop_alarm()
+                
 
 
             # ------------------------------------------------
@@ -601,7 +603,7 @@ with FaceLandmarker.create_from_options(options) as landmarker:
 
                 drowsiness_status = "DROWSINESS DETECTED"
 
-                start_alarm()
+                
 
             else:
 
@@ -627,18 +629,41 @@ with FaceLandmarker.create_from_options(options) as landmarker:
             previous_eyes_status = eyes_status
 
 
+           
+           
             # ------------------------------------------------
             # YAWN
             # ------------------------------------------------
 
-            mar = calculate_mar(
-                landmarks
-            )
+            mar = calculate_mar(landmarks)
 
             if mar > YAWN_THRESHOLD:
-                mouth_status = "YAWNING"
+                if yawn_start is None:
+                    yawn_start = time.time()
+
+                yawn_duration = time.time() - yawn_start
+
+                if yawn_duration >= YAWN_DURATION:
+                    mouth_status = "YAWNING"
+                    start_alarm()
+                else:
+                    mouth_status = "MOUTH OPEN"
+
             else:
+                yawn_start = None
                 mouth_status = "NORMAL"
+
+                # Stop alarm only if eyes are not closed long enough
+                if eyes_status == "OPEN":
+                    stop_alarm()
+            # CONTROL ALARM
+            if (
+                drowsiness_status == "DROWSINESS DETECTED"
+                or mouth_status == "YAWNING"
+            ):
+                start_alarm()
+            elif alarm_playing:
+                stop_alarm()
 
 
             # ------------------------------------------------
@@ -742,17 +767,22 @@ with FaceLandmarker.create_from_options(options) as landmarker:
             # SHOW LIVE VIDEO + STATUS
             # ====================================================
 
-            if drowsiness_status == "DROWSINESS DETECTED":
+           
+            if (
+                drowsiness_status == "DROWSINESS DETECTED"
+                or mouth_status == "YAWNING"
+            ):
                 status_text = "WARNING"
-                status_color = (0, 0, 255)       # Red
+                status_color = (0, 0, 255)
 
             elif drowsiness_status == "DRIVER ALERT":
                 status_text = "SAFE"
-                status_color = (0, 200, 0)       # Green
+                status_color = (0, 200, 0)
 
             else:
                 status_text = "SCANNING"
-                status_color = (0, 200, 255)     # Yellow
+                status_color = (0, 200, 255)
+
 
             # Status box in top-right corner
             cv2.rectangle(

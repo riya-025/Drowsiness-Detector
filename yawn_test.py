@@ -1,3 +1,4 @@
+
 import cv2
 import time
 import math
@@ -13,7 +14,6 @@ FaceLandmarker = mp.tasks.vision.FaceLandmarker
 FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
 
-
 options = FaceLandmarkerOptions(
     base_options=BaseOptions(
         model_asset_path="models/face_landmarker.task"
@@ -24,18 +24,11 @@ options = FaceLandmarkerOptions(
 
 
 # ==========================================
-# CAMERA SETUP
+# SETTINGS
 # ==========================================
 
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-
-if not cap.isOpened():
-    print("ERROR: Camera could not be opened.")
-    exit()
-
-time.sleep(2)
-
-print("Yawn detector started...")
+MAR_THRESHOLD = 0.20
+YAWN_DURATION = 0.8
 
 
 # ==========================================
@@ -43,7 +36,6 @@ print("Yawn detector started...")
 # ==========================================
 
 def distance(p1, p2):
-
     return math.sqrt(
         (p1.x - p2.x) ** 2 +
         (p1.y - p2.y) ** 2
@@ -54,148 +46,153 @@ def distance(p1, p2):
 # MOUTH ASPECT RATIO
 # ==========================================
 
+
 def calculate_mar(landmarks):
+    # Vertical distance between upper and lower inner lips
+    vertical = distance(landmarks[13], landmarks[14])
 
-    # Vertical mouth opening
-    vertical = distance(
-        landmarks[13],
-        landmarks[14]
-    )
-
-    # Horizontal mouth width
-    horizontal = distance(
-        landmarks[78],
-        landmarks[308]
-    )
+    # Horizontal distance between left and right mouth corners
+    horizontal = distance(landmarks[78], landmarks[308])
 
     if horizontal == 0:
-        return 0
+        return 0.0
 
     return vertical / horizontal
 
-
 # ==========================================
-# SETTINGS
+# CAMERA SETUP
 # ==========================================
 
-YAWN_THRESHOLD = 0.25
+cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+if not cap.isOpened():
+    print("ERROR: Camera could not be opened.")
+    raise SystemExit
+
+print("Yawn Detection Started. Press Q to quit.")
+
+yawn_start = None
+last_timestamp = 0
+
 
 
 # ==========================================
 # MAIN PROGRAM
 # ==========================================
 
-with FaceLandmarker.create_from_options(options) as landmarker:
+try:
+    with FaceLandmarker.create_from_options(options) as landmarker:
 
-    timestamp = 0
+        while True:
 
-    while True:
+            ret, frame = cap.read()
 
-        ret, frame = cap.read()
+            if not ret:
+                print("ERROR: Could not read camera frame.")
+                break
 
-        if not ret:
-            print("ERROR: Could not read frame.")
-            break
+            # Convert BGR to RGB
+            rgb_frame = cv2.cvtColor(
+                frame,
+                cv2.COLOR_BGR2RGB
+            )
 
+            mp_image = mp.Image(
+                image_format=mp.ImageFormat.SRGB,
+                data=rgb_frame
+            )
 
-        # Convert BGR to RGB
-        rgb_frame = cv2.cvtColor(
-            frame,
-            cv2.COLOR_BGR2RGB
-        )
+            # MediaPipe VIDEO timestamps must increase in milliseconds
+            timestamp = int(time.monotonic() * 1000)
+            timestamp = max(timestamp, last_timestamp + 1)
+            last_timestamp = timestamp
 
-        mp_image = mp.Image(
-            image_format=mp.ImageFormat.SRGB,
-            data=rgb_frame
-        )
+            # Detect facial landmarks
+            result = landmarker.detect_for_video(
+                mp_image,
+                timestamp
+            )
 
-        timestamp += 1
+            status = "NO FACE DETECTED"
+            color = (0, 255, 255)
+            mar = 0.0
 
+            if result.face_landmarks:
 
-        # Detect face landmarks
-        result = landmarker.detect_for_video(
-            mp_image,
-            timestamp
-        )
+                landmarks = result.face_landmarks[0]
 
+                # Calculate MAR
+                mar = calculate_mar(landmarks)
+                print(f"MAR: {mar:.3f}")
 
-        if result.face_landmarks:
+                # Check whether mouth remains open
+                if mar > MAR_THRESHOLD:
 
-            landmarks = result.face_landmarks[0]
+                    if yawn_start is None:
+                        yawn_start = time.monotonic()
 
-            # Calculate Mouth Aspect Ratio
-            mar = calculate_mar(landmarks)
+                    duration = time.monotonic() - yawn_start
 
+                    if duration >= YAWN_DURATION:
+                        status = "YAWNING"
+                        color = (0, 0, 255)
+                    else:
+                        status = "MOUTH OPEN"
+                        color = (0, 165, 255)
+
+                else:
+
+                    yawn_start = None
+                    status = "MOUTH NORMAL"
+                    color = (0, 255, 0)
+
+            else:
+                yawn_start = None
 
             # Display MAR value
             cv2.putText(
                 frame,
-                f"MAR: {mar:.2f}",
+                f"MAR: {mar:.3f}",
                 (30, 50),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (0, 255, 0),
+                0.8,
+                (255, 255, 0),
                 2
             )
 
-
-            # Detect yawning
-            if mar > YAWN_THRESHOLD:
-
-                status = "YAWNING"
-
-                color = (0, 0, 255)
-
-            else:
-
-                status = "MOUTH NORMAL"
-
-                color = (0, 255, 0)
-
-
-            # Display status
+            # Display yawn status
             cv2.putText(
                 frame,
                 status,
                 (30, 100),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                1,
+                0.9,
                 color,
                 2
             )
 
-
-        else:
-
+            # Display threshold for debugging
             cv2.putText(
                 frame,
-                "NO FACE DETECTED",
-                (30, 50),
+                f"Threshold: {MAR_THRESHOLD:.2f}",
+                (30, 145),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (0, 255, 255),
+                0.6,
+                (255, 255, 255),
                 2
             )
 
+            cv2.imshow("Yawn Detection System", frame)
 
-        # Show camera
-        cv2.imshow(
-            "Yawn Detection Test",
-            frame
-        )
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
 
+finally:
 
-        # Press Q to quit
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+    cap.release()
+    cv2.destroyAllWindows()
 
-
-# ==========================================
-# CLEANUP
-# ==========================================
-
-cap.release()
-
-cv2.destroyAllWindows()
-
-print("Yawn detector stopped.")
+    print("Yawn Detection Stopped.")
